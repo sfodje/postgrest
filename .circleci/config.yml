@@ -1,0 +1,17 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: 'circleci/golang:1.8'
+    working_directory: /go/src/github.com/sfodje/postgrest
+    steps:
+      - checkout
+      - run: go get -u github.com/alecthomas/gometalinter && gometalinter -ui
+      - run: go get -v -t -d ./...
+      - run: >-
+          gometalinter --exclude postgrest_test.go --exclude 'defer
+          response.Body.Close()' ./...
+      - run: go test -v -cover ./...
+      - run: >-
+          bash <(curl -s https://codecov.io/bash) -t
+          05883323-3ac1-4cf8-ac07-a17df432f49c
