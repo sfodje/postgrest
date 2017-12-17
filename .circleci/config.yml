@@ -11,7 +11,10 @@ jobs:
       - run: >-
           gometalinter --exclude postgrest_test.go --exclude 'defer
           response.Body.Close()' ./...
-      - run: go test -v -cover ./...
+      - run: >-
+          go test -race -coverprofile=profile.out -covermode=atomic ./... && cat
+          profile.out >> coverage.txt && rm profile.out
       - run: >-
           bash <(curl -s https://codecov.io/bash) -t
           05883323-3ac1-4cf8-ac07-a17df432f49c
+      - run: rm coverage.txt
