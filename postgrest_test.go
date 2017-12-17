@@ -17,16 +17,11 @@ import (
 	"time"
 )
 
-var (
-	server     *httptest.Server
-	testConfig *Config
-	testAgent  *Agent
-	testTable  = "test_table"
-)
+var server *httptest.Server
 
 func TestMain(m *testing.M) {
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.Contains(r.URL.Path, testTable) && r.URL.Path != "/" {
+		if !strings.Contains(r.URL.Path, "test_table") && r.URL.Path != "/" {
 			w.WriteHeader(http.StatusNotFound)
 			fmt.Fprint(w, http.StatusText(http.StatusNotFound))
 			return
@@ -67,7 +62,13 @@ func TestMain(m *testing.M) {
 		}
 	}))
 	defer server.Close()
-	testConfig = &Config{
+
+	os.Exit(m.Run())
+}
+
+func TestNewAgent(t *testing.T) {
+	t.Parallel()
+	testConfig := &Config{
 		Issuer:        "test",
 		MasterBaseURL: server.URL,
 		MasterRole:    "masterRole",
@@ -77,17 +78,6 @@ func TestMain(m *testing.M) {
 		SlaveSecret:   "slaveSecret",
 		Timeout:       5,
 	}
-	testAgent = &Agent{
-		config:      testConfig,
-		httpClient:  &http.Client{},
-		generateJWT: func(_ interface{}, _ string) (string, error) { return "secret", nil },
-	}
-
-	os.Exit(m.Run())
-}
-
-func TestNewAgent(t *testing.T) {
-	t.Parallel()
 
 	_, err := NewAgent(nil, nil, nil)
 	if err == nil || err.Error() != errMissingConfigParams.Error() {
@@ -122,10 +112,26 @@ func TestNewAgent(t *testing.T) {
 func TestGet(t *testing.T) {
 	t.Parallel()
 
+	testConfig := &Config{
+		Issuer:        "test",
+		MasterBaseURL: server.URL,
+		MasterRole:    "masterRole",
+		MasterSecret:  "masterSecret",
+		SlaveBaseURL:  server.URL,
+		SlaveRole:     "slaveRole",
+		SlaveSecret:   "slaveSecret",
+		Timeout:       5,
+	}
+	testAgent := &Agent{
+		config:      testConfig,
+		httpClient:  &http.Client{},
+		generateJWT: func(_ interface{}, _ string) (string, error) { return "secret", nil },
+	}
+
 	query := &url.Values{}
 	query.Set("id", fmt.Sprintf("%d", testObject.ID))
 
-	response, err := testAgent.Get(testTable, query)
+	response, err := testAgent.Get("test_table", query)
 	if err != nil {
 		t.Errorf("Get returned unexpected error: %v", err)
 	}
@@ -141,7 +147,7 @@ func TestGet(t *testing.T) {
 		t.Errorf("Get returned unexpected status code:\nExpected: %d\nGot: %d", http.StatusNotFound, response.StatusCode)
 	}
 
-	response, err = testAgent.Get(testTable, query)
+	response, err = testAgent.Get("test_table", query)
 	if err != nil {
 		t.Errorf("Get returned unexpected error: %v", err)
 	}
@@ -149,11 +155,24 @@ func TestGet(t *testing.T) {
 		t.Errorf("Get returned unexpected status code:\nExpected: %d\nGot: %d", http.StatusOK, response.StatusCode)
 	}
 
-	agent := &Agent{}
-	*agent = *testAgent
-	agent.config.SlaveBaseURL = "://xy/"
+	testConfig = &Config{
+		Issuer:        "test",
+		MasterBaseURL: server.URL,
+		MasterRole:    "masterRole",
+		MasterSecret:  "masterSecret",
+		SlaveBaseURL:  "://xy/",
+		SlaveRole:     "slaveRole",
+		SlaveSecret:   "slaveSecret",
+		Timeout:       5,
+	}
+	testAgent = &Agent{
+		config:      testConfig,
+		httpClient:  &http.Client{},
+		generateJWT: func(_ interface{}, _ string) (string, error) { return "secret", nil },
+	}
+
 	expectedError := errors.New("parse ://xy/: missing protocol scheme")
-	_, err = agent.Get(testTable, query)
+	_, err = testAgent.Get("test_table", query)
 	if err == nil || err.Error() != expectedError.Error() {
 		t.Errorf("Get returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
 	}
@@ -161,6 +180,22 @@ func TestGet(t *testing.T) {
 
 func TestGetJSON(t *testing.T) {
 	t.Parallel()
+
+	testConfig := &Config{
+		Issuer:        "test",
+		MasterBaseURL: server.URL,
+		MasterRole:    "masterRole",
+		MasterSecret:  "masterSecret",
+		SlaveBaseURL:  server.URL,
+		SlaveRole:     "slaveRole",
+		SlaveSecret:   "slaveSecret",
+		Timeout:       5,
+	}
+	testAgent := &Agent{
+		config:      testConfig,
+		httpClient:  &http.Client{},
+		generateJWT: func(_ interface{}, _ string) (string, error) { return "secret", nil },
+	}
 
 	query := &url.Values{}
 	query.Set("id", fmt.Sprintf("%d", testObject.ID))
@@ -171,13 +206,13 @@ func TestGetJSON(t *testing.T) {
 	}
 
 	expectedError := errors.New("mock error")
-	status, err := agent.GetJSON(testTable, query, nil)
+	status, err := agent.GetJSON("test_table", query, nil)
 	if err == nil || err.Error() != expectedError.Error() {
 		t.Errorf("GetJSON returned an unexpected error:\nExpected: %v\n%d\nGot: %v", expectedError, status, err)
 	}
 
 	obj := &object{}
-	status, err = testAgent.GetJSON(testTable, query, obj)
+	status, err = testAgent.GetJSON("test_table", query, obj)
 	if err != nil {
 		t.Errorf("GetJSON returned an unexpected error: %v", err)
 	}
@@ -192,40 +227,67 @@ func TestGetJSON(t *testing.T) {
 func TestPost(t *testing.T) {
 	t.Parallel()
 
+	testConfig := &Config{
+		Issuer:        "test",
+		MasterBaseURL: server.URL,
+		MasterRole:    "masterRole",
+		MasterSecret:  "masterSecret",
+		SlaveBaseURL:  server.URL,
+		SlaveRole:     "slaveRole",
+		SlaveSecret:   "slaveSecret",
+		Timeout:       5,
+	}
+	testAgent := &Agent{
+		config:      testConfig,
+		httpClient:  &http.Client{},
+		generateJWT: func(_ interface{}, _ string) (string, error) { return "secret", nil },
+	}
+
 	bodyBytes, _ := json.Marshal(testObject)
-	agent := &Agent{}
-	*agent = *testAgent
-	config := &Config{}
-	*config = *testConfig
-	config.MasterBaseURL = "://xy/"
-	agent.config = config
-	expectedError := errors.New("parse ://xy/: missing protocol scheme")
-	_, err := agent.Post(testTable, bytes.NewBuffer(bodyBytes))
-	if err == nil || err.Error() != expectedError.Error() {
-		t.Errorf("Post returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
-	}
-
-	expectedError = errors.New("Post test_table: unsupported protocol scheme \"\"")
-	config.MasterBaseURL = ""
-	_, err = agent.Post(testTable, bytes.NewBuffer(bodyBytes))
-	if err == nil || err.Error() != expectedError.Error() {
-		t.Errorf("Post returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
-	}
-
-	response, err := testAgent.Post(testTable, bytes.NewBuffer(bodyBytes))
+	response, err := testAgent.Post("test_table", bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		t.Errorf("Post returned unexpected error: %v", err)
 	}
 	if response.StatusCode != http.StatusCreated {
 		t.Errorf("Post returned unexpected status code:\nExpected: %d\nGot: %d", http.StatusCreated, response.StatusCode)
 	}
+
+	testAgent.config.MasterBaseURL = "://xy/"
+	expectedError := errors.New("parse ://xy/: missing protocol scheme")
+	_, err = testAgent.Post("test_table", bytes.NewBuffer(bodyBytes))
+	if err == nil || err.Error() != expectedError.Error() {
+		t.Errorf("Post returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
+	}
+
+	expectedError = errors.New("Post test_table: unsupported protocol scheme \"\"")
+	testAgent.config.MasterBaseURL = ""
+	_, err = testAgent.Post("test_table", bytes.NewBuffer(bodyBytes))
+	if err == nil || err.Error() != expectedError.Error() {
+		t.Errorf("Post returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
+	}
 }
 
 func TestPostJSON(t *testing.T) {
 	t.Parallel()
 
+	testConfig := &Config{
+		Issuer:        "test",
+		MasterBaseURL: server.URL,
+		MasterRole:    "masterRole",
+		MasterSecret:  "masterSecret",
+		SlaveBaseURL:  server.URL,
+		SlaveRole:     "slaveRole",
+		SlaveSecret:   "slaveSecret",
+		Timeout:       5,
+	}
+	testAgent := &Agent{
+		config:      testConfig,
+		httpClient:  &http.Client{},
+		generateJWT: func(_ interface{}, _ string) (string, error) { return "secret", nil },
+	}
+
 	bodyBytes, _ := json.Marshal(testObject)
-	status, err := testAgent.PostJSON(testTable, bytes.NewBuffer(bodyBytes), nil)
+	status, err := testAgent.PostJSON("test_table", bytes.NewBuffer(bodyBytes), nil)
 	if err != nil {
 		t.Errorf("PostJSON returned unexpected error: %v", err)
 	}
@@ -233,43 +295,25 @@ func TestPostJSON(t *testing.T) {
 		t.Errorf("PostJSON returned unexpected status code:\nExpected: %d\nGot: %d", http.StatusCreated, status)
 	}
 
-	agent := &Agent{}
-	*agent = *testAgent
-	config := &Config{}
-	*config = *testConfig
-	config.MasterBaseURL = "://xy/"
-	agent.config = config
+	testAgent.config.MasterBaseURL = "://xy/"
 	expectedError := errors.New("parse ://xy/: missing protocol scheme")
-	_, err = agent.PostJSON(testTable, bytes.NewBuffer(bodyBytes), nil)
+	_, err = testAgent.PostJSON("test_table", bytes.NewBuffer(bodyBytes), nil)
 	if err == nil || err.Error() != expectedError.Error() {
 		t.Errorf("PostJSON returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
 	}
 
 	obj := &object{}
 	expectedError = errors.New("parse ://xy/: missing protocol scheme")
-	_, err = agent.PostJSON(testTable, bytes.NewBuffer(bodyBytes), obj)
+	_, err = testAgent.PostJSON("test_table", bytes.NewBuffer(bodyBytes), obj)
 	if err == nil || err.Error() != expectedError.Error() {
 		t.Errorf("PostJSON returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
 	}
 
 	obj = &object{}
-	status, err = testAgent.PostJSON(testTable, bytes.NewBuffer(bodyBytes), obj)
-	if err != nil {
-		t.Errorf("PostJSON returned an unexpected error: %v", err)
-	}
-	if status != http.StatusCreated {
-		t.Errorf("PostJSON returned an unexpected status code:\nExpected: %d\nGot: %d", http.StatusCreated, status)
-	}
-	if !reflect.DeepEqual(obj, testObject) {
-		t.Errorf("PostJSON returned unexpected results:\nExpected: %v\nGot: %v", testObject, obj)
-	}
-
-	obj = &object{}
-	*agent = *testAgent
-	*config = *testConfig
+	testAgent.config.MasterBaseURL = server.URL
 	expectedError = errors.New("mock error")
-	agent.generateJWT = func(_ interface{}, _ string) (string, error) { return "", expectedError }
-	_, err = agent.PostJSON(testTable, bytes.NewBuffer(bodyBytes), obj)
+	testAgent.generateJWT = func(_ interface{}, _ string) (string, error) { return "", expectedError }
+	_, err = testAgent.PostJSON("test_table", bytes.NewBuffer(bodyBytes), obj)
 	if err == nil || err.Error() != expectedError.Error() {
 		t.Errorf("PostJSON returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
 	}
@@ -278,84 +322,116 @@ func TestPostJSON(t *testing.T) {
 func TestPatch(t *testing.T) {
 	t.Parallel()
 
+	testConfig := &Config{
+		Issuer:        "test",
+		MasterBaseURL: server.URL,
+		MasterRole:    "masterRole",
+		MasterSecret:  "masterSecret",
+		SlaveBaseURL:  server.URL,
+		SlaveRole:     "slaveRole",
+		SlaveSecret:   "slaveSecret",
+		Timeout:       5,
+	}
+	testAgent := &Agent{
+		config:      testConfig,
+		httpClient:  &http.Client{},
+		generateJWT: func(_ interface{}, _ string) (string, error) { return "secret", nil },
+	}
+
 	query := &url.Values{}
 	query.Set("id", fmt.Sprintf("%d", testObject.ID))
 	bodyBytes, _ := json.Marshal(testObject)
-	agent := &Agent{}
-	*agent = *testAgent
-	config := &Config{}
-	*config = *testConfig
-	config.MasterBaseURL = "://xy/"
-	agent.config = config
-	expectedError := errors.New("parse ://xy/: missing protocol scheme")
-	_, err := agent.Patch(testTable, query, bytes.NewBuffer(bodyBytes))
-	if err == nil || err.Error() != expectedError.Error() {
-		t.Errorf("Patch returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
-	}
 
-	expectedError = errors.New("unsupported protocol scheme \"\"")
-	config.MasterBaseURL = ""
-	_, err = agent.Patch(testTable, query, bytes.NewBuffer(bodyBytes))
-	if err == nil || !strings.Contains(err.Error(), expectedError.Error()) {
-		t.Errorf("Patch returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
-	}
-
-	response, err := testAgent.Patch(testTable, query, bytes.NewBuffer(bodyBytes))
+	response, err := testAgent.Patch("test_table", query, bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		t.Errorf("Patch returned unexpected error: %v", err)
 	}
 	if response.StatusCode != http.StatusNoContent {
 		t.Errorf("Patch returned unexpected status code:\nExpected: %d\nGot: %d", http.StatusNoContent, response.StatusCode)
 	}
+
+	testAgent.config.MasterBaseURL = "://xy/"
+	expectedError := errors.New("parse ://xy/: missing protocol scheme")
+	response, err = testAgent.Patch("test_table", query, bytes.NewBuffer(bodyBytes))
+	if err == nil || err.Error() != expectedError.Error() {
+		t.Errorf("Patch returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
+	}
+
+	expectedError = errors.New("unsupported protocol scheme \"\"")
+	testAgent.config.MasterBaseURL = ""
+	_, err = testAgent.Patch("test_table", query, bytes.NewBuffer(bodyBytes))
+	if err == nil || !strings.Contains(err.Error(), expectedError.Error()) {
+		t.Errorf("Patch returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
+	}
+
 }
 
 func TestPatchJSON(t *testing.T) {
 	t.Parallel()
 
+	testConfig := &Config{
+		Issuer:        "test",
+		MasterBaseURL: server.URL,
+		MasterRole:    "masterRole",
+		MasterSecret:  "masterSecret",
+		SlaveBaseURL:  server.URL,
+		SlaveRole:     "slaveRole",
+		SlaveSecret:   "slaveSecret",
+		Timeout:       5,
+	}
+	testAgent := &Agent{
+		config:      testConfig,
+		httpClient:  &http.Client{},
+		generateJWT: func(_ interface{}, _ string) (string, error) { return "secret", nil },
+	}
+
 	query := &url.Values{}
 	query.Set("id", fmt.Sprintf("%d", testObject.ID))
 	bodyBytes, _ := json.Marshal(testObject)
-	status, err := testAgent.PatchJSON(testTable, query, bytes.NewBuffer(bodyBytes))
-	if err != nil {
-		t.Errorf("PatchJSON returned unexpected error: %v", err)
-	}
-	if status != http.StatusNoContent {
-		t.Errorf("PatchJSON returned unexpected status code:\nExpected: %d\nGot: %d", http.StatusNoContent, status)
-	}
-
-	agent := &Agent{}
-	*agent = *testAgent
-	config := &Config{}
-	*config = *testConfig
-	config.MasterBaseURL = "://xy/"
-	agent.config = config
-	expectedError := errors.New("parse ://xy/: missing protocol scheme")
-	_, err = agent.PatchJSON(testTable, query, bytes.NewBuffer(bodyBytes))
-	if err == nil || err.Error() != expectedError.Error() {
-		t.Errorf("PatchJSON returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
-	}
-
-	expectedError = errors.New("parse ://xy/: missing protocol scheme")
-	_, err = agent.PatchJSON(testTable, query, bytes.NewBuffer(bodyBytes))
-	if err == nil || err.Error() != expectedError.Error() {
-		t.Errorf("PatchJSON returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
-	}
-
-	status, err = testAgent.PatchJSON(testTable, query, bytes.NewBuffer(bodyBytes))
+	status, err := testAgent.PatchJSON("test_table", query, bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		t.Errorf("PatchJSON returned an unexpected error: %v", err)
 	}
 	if status != http.StatusNoContent {
 		t.Errorf("PatchJSON returned an unexpected status code:\nExpected: %d\nGot: %d", http.StatusNoContent, status)
 	}
+
+	testAgent.config.MasterBaseURL = "://xy/"
+	expectedError := errors.New("parse ://xy/: missing protocol scheme")
+	_, err = testAgent.PatchJSON("test_table", query, bytes.NewBuffer(bodyBytes))
+	if err == nil || err.Error() != expectedError.Error() {
+		t.Errorf("PatchJSON returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
+	}
+
+	expectedError = errors.New("parse ://xy/: missing protocol scheme")
+	_, err = testAgent.PatchJSON("test_table", query, bytes.NewBuffer(bodyBytes))
+	if err == nil || err.Error() != expectedError.Error() {
+		t.Errorf("PatchJSON returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
+	}
 }
 
 func TestDelete(t *testing.T) {
 	t.Parallel()
 
+	testConfig := &Config{
+		Issuer:        "test",
+		MasterBaseURL: server.URL,
+		MasterRole:    "masterRole",
+		MasterSecret:  "masterSecret",
+		SlaveBaseURL:  server.URL,
+		SlaveRole:     "slaveRole",
+		SlaveSecret:   "slaveSecret",
+		Timeout:       5,
+	}
+	testAgent := &Agent{
+		config:      testConfig,
+		httpClient:  &http.Client{},
+		generateJWT: func(_ interface{}, _ string) (string, error) { return "secret", nil },
+	}
+
 	query := &url.Values{}
 	query.Set("id", fmt.Sprintf("%d", testObject.ID))
-	response, err := testAgent.Delete(testTable, query)
+	response, err := testAgent.Delete("test_table", query)
 	if err != nil {
 		t.Errorf("Delete returned an unexpected error:%v", err)
 	}
@@ -363,14 +439,9 @@ func TestDelete(t *testing.T) {
 		t.Errorf("Delete returned an unexpected status code:\nExpected: %d\nGot: %d", http.StatusOK, response.StatusCode)
 	}
 
-	agent := &Agent{}
-	*agent = *testAgent
-	config := &Config{}
-	*config = *testConfig
-	config.MasterBaseURL = "://xy/"
-	agent.config = config
+	testAgent.config.MasterBaseURL = "://xy/"
 	expectedError := errors.New("parse ://xy/: missing protocol scheme")
-	response, err = agent.Delete(testTable, query)
+	response, err = testAgent.Delete("test_table", query)
 	if err != nil && err.Error() != expectedError.Error() {
 		t.Errorf("Delete returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
 	}
@@ -382,9 +453,25 @@ func TestDelete(t *testing.T) {
 func TestDeleteJSON(t *testing.T) {
 	t.Parallel()
 
+	testConfig := &Config{
+		Issuer:        "test",
+		MasterBaseURL: server.URL,
+		MasterRole:    "masterRole",
+		MasterSecret:  "masterSecret",
+		SlaveBaseURL:  server.URL,
+		SlaveRole:     "slaveRole",
+		SlaveSecret:   "slaveSecret",
+		Timeout:       5,
+	}
+	testAgent := &Agent{
+		config:      testConfig,
+		httpClient:  &http.Client{},
+		generateJWT: func(_ interface{}, _ string) (string, error) { return "secret", nil },
+	}
+
 	query := &url.Values{}
 	query.Set("id", fmt.Sprintf("%d", testObject.ID))
-	status, err := testAgent.DeleteJSON(testTable, query)
+	status, err := testAgent.DeleteJSON("test_table", query)
 	if err != nil {
 		t.Errorf("Delete returned an unexpected error:%v", err)
 	}
@@ -392,14 +479,9 @@ func TestDeleteJSON(t *testing.T) {
 		t.Errorf("Delete returned an unexpected status code:\nExpected: %d\nGot: %d", http.StatusOK, status)
 	}
 
-	agent := &Agent{}
-	*agent = *testAgent
-	config := &Config{}
-	*config = *testConfig
-	config.MasterBaseURL = "://xy/"
-	agent.config = config
+	testAgent.config.MasterBaseURL = "://xy/"
 	expectedError := errors.New("parse ://xy/: missing protocol scheme")
-	_, err = agent.DeleteJSON(testTable, query)
+	_, err = testAgent.DeleteJSON("test_table", query)
 	if err == nil || err.Error() != expectedError.Error() {
 		t.Errorf("Delete returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
 	}
@@ -407,30 +489,58 @@ func TestDeleteJSON(t *testing.T) {
 
 func TestPing(t *testing.T) {
 	t.Parallel()
+
+	testConfig := &Config{
+		Issuer:        "test",
+		MasterBaseURL: server.URL,
+		MasterRole:    "masterRole",
+		MasterSecret:  "masterSecret",
+		SlaveBaseURL:  server.URL,
+		SlaveRole:     "slaveRole",
+		SlaveSecret:   "slaveSecret",
+		Timeout:       5,
+	}
+	testAgent := &Agent{
+		config:      testConfig,
+		httpClient:  &http.Client{},
+		generateJWT: func(_ interface{}, _ string) (string, error) { return "secret", nil },
+	}
+
 	if err := testAgent.Ping(); err != nil {
 		t.Errorf("Ping returned unexpected error: %v", err)
 	}
 
-	agent := &Agent{}
-	*agent = *testAgent
-	config := &Config{}
-	*config = *testConfig
-	config.MasterBaseURL = "://xy/"
-	agent.config = config
+	testAgent.config.MasterBaseURL = "://xy/"
 	expectedError := errors.New("master service error: parse ://xy/: missing protocol scheme")
-	if err := agent.Ping(); err == nil || err.Error() != expectedError.Error() {
+	if err := testAgent.Ping(); err == nil || err.Error() != expectedError.Error() {
 		t.Errorf("Ping returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
 	}
 
-	config.MasterBaseURL = server.URL + "?error=404"
+	testAgent.config.MasterBaseURL = server.URL + "?error=404"
 	expectedError = errors.New("master service error: 404 Not Found")
-	if err := agent.Ping(); err == nil || err.Error() != expectedError.Error() {
+	if err := testAgent.Ping(); err == nil || err.Error() != expectedError.Error() {
 		t.Errorf("Ping returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
 	}
 }
 
 func TestNewRequest(t *testing.T) {
 	t.Parallel()
+
+	testConfig := &Config{
+		Issuer:        "test",
+		MasterBaseURL: server.URL,
+		MasterRole:    "masterRole",
+		MasterSecret:  "masterSecret",
+		SlaveBaseURL:  server.URL,
+		SlaveRole:     "slaveRole",
+		SlaveSecret:   "slaveSecret",
+		Timeout:       5,
+	}
+	testAgent := &Agent{
+		config:      testConfig,
+		httpClient:  &http.Client{},
+		generateJWT: func(_ interface{}, _ string) (string, error) { return "secret", nil },
+	}
 
 	_, err := testAgent.NewRequest("", "", nil)
 	expectedError := errMissingRequestURL
