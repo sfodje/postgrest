@@ -295,6 +295,15 @@ func TestPostJSON(t *testing.T) {
 		t.Errorf("PostJSON returned unexpected status code:\nExpected: %d\nGot: %d", http.StatusCreated, status)
 	}
 
+	obj := &object{}
+	status, err = testAgent.PostJSON("test_table", bytes.NewBuffer(bodyBytes), obj)
+	if err != nil {
+		t.Errorf("PostJSON returned unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(obj, testObject) {
+		t.Errorf("PostJSON did not unmarshal response as expected:\nExpected: %v\nGot: %v", testObject, obj)
+	}
+
 	testAgent.config.MasterBaseURL = "://xy/"
 	expectedError := errors.New("parse ://xy/: missing protocol scheme")
 	_, err = testAgent.PostJSON("test_table", bytes.NewBuffer(bodyBytes), nil)
@@ -302,7 +311,7 @@ func TestPostJSON(t *testing.T) {
 		t.Errorf("PostJSON returned unexpected error:\nExpected: %v\nGot: %v", expectedError, err)
 	}
 
-	obj := &object{}
+	obj = &object{}
 	expectedError = errors.New("parse ://xy/: missing protocol scheme")
 	_, err = testAgent.PostJSON("test_table", bytes.NewBuffer(bodyBytes), obj)
 	if err == nil || err.Error() != expectedError.Error() {

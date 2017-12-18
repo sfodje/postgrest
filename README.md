@@ -3,7 +3,7 @@ An HTTP client wrapper for making REST requests to a PostgREST service in Golang
 
 ## Installation
 ```
-$ go get bitbucket.org/sfodje/postgrest
+$ go get github.com/sfodje/postgrest
 ```
 
 ## Sample Usage
@@ -16,7 +16,7 @@ import (
 
 	jwt "github.com/dgrijalva/jwt-go"
 
-	"bitbucket.org/sfodje/postgrest"
+	"github.com/sfodje/postgrest"
 )
 
 // postgrest configuration
